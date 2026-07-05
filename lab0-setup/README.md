@@ -180,6 +180,7 @@ touch shortbread.txt
 
 Open the file in any text editor and add this content:
 
+```bash
 Shortbread Cookies
 Yield: 12 cookies
 Ingredients:
@@ -187,6 +188,7 @@ Ingredients:
 1 cup butter
 1/2 cup powdered sugar
 2 cups flour
+```
 
 Save the file, then check Git's view of your project:
 
@@ -284,7 +286,7 @@ Refresh your GitHub repository page, your files and all three commits should be 
 
 > Note: You can also use [GitHub Desktop](https://desktop.github.com/) as a graphical alternative to the command line for cloning and pushing, if you prefer a visual interface.
 
-🛑 **STOP:** Show a TA your GitHub repository with all three commits visible in the commit history before moving on.
+**STOP:** Show a TA your GitHub repository with all three commits visible in the commit history before moving on.
 
 ---
 
@@ -345,7 +347,7 @@ Expected: `10.9.2`
 
 > ⚠️ Warning: If the versions do not match, close your terminal, reopen it, and run the commands again before troubleshooting further.
 
-🛑 **STOP:** Show a TA your terminal with `node -v` returning `v22.17.0` and `npm -v` returning `10.9.2` before moving on.
+**STOP:** Show a TA your terminal with `node -v` returning `v22.17.0` and `npm -v` returning `10.9.2` before moving on.
 
 ---
 
