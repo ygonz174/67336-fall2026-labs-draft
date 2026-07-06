@@ -37,9 +37,9 @@ Before writing a single line of code, here is the key idea for this lab.
 
 Consider these two scenarios:
 
-**Scenario A:** A dataset of city temperatures where some values are recorded in Celsius and others in Fahrenheit, with no label indicating which is which. A bar chart made from this data will show wildly inconsistent values. Phoenix in July might look colder than Anchorage in January. The chart looks fine, but the insight is wrong.
+**Scenario A:** A dataset of restaurant inspections where the same restaurant appears under slightly different names ("Ali Baba", "ALI BABA", "Ali Baba Restaurant") and the same municipality is written three different ways. A chart grouping by restaurant name or location will split one business into three, making small restaurants look bigger and big ones look smaller. The chart looks fine, but the insight is wrong.
 
-**Scenario B:** The same dataset, cleaned. All values converted to one unit, missing entries removed, outliers flagged. Now the chart tells the truth.
+**Scenario B:** The same dataset, cleaned. Names standardized, duplicates removed, inconsistent categories fixed. Now the chart tells the truth.
 
 This lab is about building the habits that get you from Scenario A to Scenario B!
 
@@ -77,7 +77,7 @@ Here are reliable sources to use for this lab and your future projects:
 **Government and civic data:**
 - https://data.gov — U.S. federal open data portal
 - https://data.census.gov — U.S. Census Bureau
-- https://data.cityofpittsburgh.pa.gov — Pittsburgh open data (great for local projects)
+- https://data.wprdc.org — Western Pennsylvania Regional Data Center (great for local projects)
 - https://opendata.cityofnewyork.us — NYC open data
 - https://data.worldbank.org — World Bank global development data
 
@@ -107,9 +107,7 @@ For this lab, choose one dataset from the sources above. It must meet all of the
 - [ ] Has clear documentation or column headers you can interpret
 - [ ] Is available as a CSV, JSON, or via a public API
 
-> Not sure what to pick? We recommend starting with the **Pittsburgh 311 Service Requests** dataset from https://data.wprdc.org/dataset/311-data. It contains civic complaints by neighborhood, type, and date. It is large enough to be interesting and realistic. All examples in this lab use this dataset.
-
->Note: The Pittsburgh 311 dataset is an archive that covers requests up to February 2025 when the City transitioned to a new system. It is still a great dataset for this lab because the historical data is rich and well documented.
+> Not sure what to pick? We recommend the **Allegheny County Restaurant and Food Facility Inspection** dataset from https://data.wprdc.org/dataset/allegheny-county-restaurant-food-facility-inspection-violations. It contains inspection records for restaurants and food facilities across Allegheny County including inspection dates, facility types, categories, locations, and permit status. It has real data quality issues to practice cleaning on and is locally relevant to Pittsburgh and CMU students. All examples in this lab use this dataset.
 
 Write down your answers to the five quality questions from Step 1 before moving on. You will reference them in your write-up.
 
@@ -180,13 +178,35 @@ git push -u origin main
 
 ### Step 6: Add your dataset
 
-Download your dataset as a CSV file. Place it inside the `src/data/` folder of your project.
+Download your dataset as a CSV file and place it inside the `src/data/` folder of your project.
 
-For the Pittsburgh 311 dataset:
-1. Go to https://data.wprdc.org/dataset/311-data
-2. Search for "311 Service Requests"
-3. Click Export → CSV
-4. Save the file as `requests.csv` and place it in `src/data/`
+For the Allegheny County Restaurant Inspections dataset:
+1. Go to https://data.wprdc.org/dataset/allegheny-county-restaurant-food-facility-inspection-violations
+2. Click the **Download** button and select **CSV**
+3. Save the file as `inspections.csv` and place it in `src/data/`
+
+Your dataset has the following columns:
+
+| Column | What it contains |
+|---|---|
+| `_id` | Unique row identifier |
+| `inspection_id` | Inspection identifier |
+| `placard_desc` | Inspection result (e.g. "Inspected & Permitted") |
+| `facility_name` | Name of the restaurant or food facility |
+| `bus_st_date` | Business start date |
+| `facility_type` | Type of facility |
+| `category` | Category code and description (e.g. "201-Restaurant with Liquor") |
+| `nonprofit` | Whether the facility is a nonprofit (Yes or No) |
+| `num` | Street number |
+| `street` | Street name |
+| `city` | City |
+| `state` | State |
+| `zip_code` | Zip code |
+| `municipal` | Municipality name |
+| `inspect_dt` | Date of inspection |
+| `inspection_purpose` | Comprehensive, Reinspection, or Service Request |
+| `reinspection_need` | Whether a reinspection is needed (Yes or No) |
+| `permit_status` | Active, About to Expire, etc. |
 
 ---
 
@@ -195,7 +215,7 @@ For the Pittsburgh 311 dataset:
 Open `src/index.md` in VS Code. This is your main notebook file. Load your dataset:
 
 ```javascript
-const raw = await FileAttachment("data/requests.csv").csv({ typed: true });
+const raw = await FileAttachment("data/inspections.csv").csv({ typed: true });
 ```
 
 > Note: The `{ typed: true }` flag tells Observable to automatically detect column types, numbers as numbers, dates as dates, rather than reading everything as strings. Always include this.
@@ -219,7 +239,7 @@ Object.keys(raw[0])
 
 Write down what you see. How many rows? What are the column names? Do the types look right?
 
-> Note: The column names in your dataset will be different from the examples below. Replace column names like `request_type`, `neighborhood`, and `created_on` with the actual column names from your dataset.
+> Note: If you chose a different dataset, replace the column names in the examples below with your actual column names.
 
 ---
 
@@ -230,114 +250,128 @@ Real data almost always has at least some of these issues. Work through each one
 **Missing values:**
 
 ```javascript
-// Replace "request_type" with your actual column name
-const missingCount = raw.filter(d => d.request_type == null || d.request_type === "").length;
-console.log("Missing values:", missingCount);
+// Check for missing facility names
+const missingNames = raw.filter(d => d.facility_name == null || d.facility_name === "").length;
+console.log("Missing facility names:", missingNames);
+
+// Check for missing inspection dates
+const missingDates = raw.filter(d => d.inspect_dt == null || d.inspect_dt === "").length;
+console.log("Missing inspection dates:", missingDates);
 ```
 
 **Duplicates:**
 
 ```javascript
-// Replace "request_id" with your unique identifier column
-const ids = raw.map(d => d.request_id);
+// The same facility can appear multiple times — once per inspection.
+// Check for duplicate inspection IDs, which would be a true duplicate.
+const ids = raw.map(d => d.inspection_id);
 const uniqueIds = new Set(ids);
 const duplicates = ids.length - uniqueIds.size;
-console.log("Duplicate rows:", duplicates);
+console.log("Duplicate inspection IDs:", duplicates);
+```
+
+**Inconsistent formatting:**
+
+```javascript
+// Check how municipality names are written
+const municipals = [...new Set(raw.map(d => d.municipal))];
+console.log(municipals);
+```
+
+You will likely see the same municipality written multiple ways, for example `"PITTSBURGH-101"`, `"PITTSBURGH-102"`, and `"CITY OF PITTSBURGH -WARD 4"` all referring to Pittsburgh. That breaks grouping and counts.
+
+```javascript
+// Check how categories are written
+const categories = [...new Set(raw.map(d => d.category))];
+console.log(categories);
+```
+
+Notice that categories combine a numeric code and a description, for example `"201-Restaurant with Liquor"`. You may want to split these or standardize them.
+
+**Wrong data types:**
+
+```javascript
+// Check if inspection date came in as a string or a Date
+console.log(typeof raw[0].inspect_dt);
 ```
 
 **Outliers:**
 
 ```javascript
-import { min, max, mean } from "npm:d3-array";
+// Check business start dates — some go back to the early 1900s
+import { min, max } from "npm:d3-array";
 
-// Replace "response_time" with your numeric column
-const values = raw.map(d => d.response_time).filter(v => v != null);
-console.log("Min:", min(values));
-console.log("Max:", max(values));
-console.log("Mean:", mean(values));
+const dates = raw.map(d => new Date(d.bus_st_date)).filter(d => !isNaN(d));
+console.log("Earliest business start:", min(dates));
+console.log("Latest business start:", max(dates));
 ```
 
-An outlier is a value that is statistically unusual. It might be real (an actual extreme event) or it might be an error (a sensor malfunction, a typo). You need to decide which.
-
-**Inconsistent formatting:**
-
-```javascript
-// Replace "neighborhood" with your categorical column
-const categories = [...new Set(raw.map(d => d.neighborhood))];
-console.log(categories);
-```
-
-You might see `"Mt. Lebanon"`, `"Mt Lebanon"`, and `"MT LEBANON"` all meaning the same place. That breaks grouping and counts.
-
-**Wrong data types:**
-
-```javascript
-// Check if a column that should be numeric is coming in as a string
-console.log(typeof raw[0].response_time); // should be "number", not "string"
-```
-
-This happens when a column has a stray comma, dollar sign, or percent sign that prevents automatic type detection.
+A business start date of 1931 is unusual but plausible for an old establishment. A date of 1900-01-01 for many records is likely a sentinel value used when the real date was unknown.
 
 ---
 
 ### Step 9: Clean your data
 
-Now fix the problems you found. Replace the column names below with your actual column names. Document every decision you make, this is part of your write-up.
+Now fix the problems you found. Document every decision you make — this is part of your write-up.
 
 **Remove rows with missing values in critical columns:**
 
 ```javascript
 const cleaned = raw.filter(d =>
-  d.request_type != null &&
-  d.request_type !== "" &&
-  d.neighborhood != null
+  d.facility_name != null &&
+  d.facility_name !== "" &&
+  d.inspect_dt != null &&
+  d.inspect_dt !== ""
 );
 ```
 
-**Remove duplicates:**
+**Remove duplicate inspections:**
 
 ```javascript
 const seen = new Set();
-const deduped = raw.filter(d => {
-  if (seen.has(d.request_id)) return false;
-  seen.add(d.request_id);
+const deduped = cleaned.filter(d => {
+  if (seen.has(d.inspection_id)) return false;
+  seen.add(d.inspection_id);
   return true;
 });
 ```
 
-**Standardize categorical values:**
+**Standardize facility names:**
 
 ```javascript
-const cleaned = raw.map(d => ({
+const normalized = deduped.map(d => ({
   ...d,
-  neighborhood: d.neighborhood.trim().toLowerCase()
+  facility_name: d.facility_name.trim().toLowerCase()
 }));
 ```
 
-**Convert types:**
+**Clean up the category column:**
 
 ```javascript
-const cleaned = raw.map(d => ({
+// Extract just the description part after the dash
+const normalized = deduped.map(d => ({
   ...d,
-  created_on: new Date(d.created_on)
+  category_clean: d.category.includes("-")
+    ? d.category.split("-").slice(1).join("-").trim()
+    : d.category.trim()
 }));
 ```
 
-**Handle outliers:**
-
-Do not automatically delete outliers. First decide: is this value plausible? If a response time column shows -999, that is a sentinel value used as a placeholder when data was missing. Remove it. If it shows an unusually high but possible value, keep it and note it.
+**Convert inspection date to a proper Date object:**
 
 ```javascript
-// Remove sentinel values — adjust the range to fit your data
-const cleaned = raw.filter(d => d.response_time > 0 && d.response_time < 10000);
+const normalized = deduped.map(d => ({
+  ...d,
+  inspect_date: new Date(d.inspect_dt)
+}));
 ```
 
-After cleaning, compare row counts:
+**After cleaning, compare row counts:**
 
 ```javascript
 console.log("Raw rows:", raw.length);
-console.log("Cleaned rows:", cleaned.length);
-console.log("Rows removed:", raw.length - cleaned.length);
+console.log("Cleaned rows:", normalized.length);
+console.log("Rows removed:", raw.length - normalized.length);
 ```
 
 ---
@@ -394,9 +428,9 @@ Before writing any code, write down the following for each visualization:
 **Visualization 2:**
 - Same fields as above, for a different question
 
-**Example using Pittsburgh 311 data:**
-- Viz 1: "Which neighborhoods generate the most service requests?" → Horizontal bar chart, sorted by count
-- Viz 2: "How do request volumes change throughout the year?" → Line chart with month on the x axis
+**Example using the Restaurant Inspections data:**
+- Viz 1: "Which facility categories get reinspected most often?" → Bar chart sorted by reinspection count
+- Viz 2: "How has the number of inspections changed over time?" → Line chart with inspection date on the x axis
 
 ---
 
@@ -413,63 +447,81 @@ Use Observable Plot to build your first chart. Here are the patterns you will us
 ```javascript
 import * as Plot from "npm:@observablehq/plot";
 
+// Count reinspections by category
+const reinspections = d3.rollups(
+  normalized.filter(d => d.reinspection_need === "Yes"),
+  v => v.length,
+  d => d.category_clean
+).map(([category, count]) => ({ category, count }));
+
 Plot.plot({
   marks: [
-    Plot.barY(cleaned, {
-      x: "neighborhood",
-      y: "request_count",
+    Plot.barX(reinspections, {
+      y: "category",
+      x: "count",
       fill: "steelblue",
-      sort: { x: "-y" }
+      sort: { y: "-x" }
     })
   ],
-  x: { label: "Neighborhood", tickRotate: -45 },
-  y: { label: "Number of Requests" },
-  title: "311 Service Requests by Neighborhood",
-  marginBottom: 80
+  y: { label: "Facility Category" },
+  x: { label: "Number of Reinspections" },
+  title: "Reinspections Needed by Facility Category",
+  marginLeft: 200
 })
 ```
 
 **Line chart (time series):**
 
 ```javascript
+// Count inspections per month
+const byMonth = d3.rollups(
+  normalized,
+  v => v.length,
+  d => d3.timeMonth(d.inspect_date)
+).map(([date, count]) => ({ date, count }));
+
 Plot.plot({
   marks: [
-    Plot.lineY(cleaned, {
-      x: "created_on",
-      y: "request_count",
+    Plot.lineY(byMonth, {
+      x: "date",
+      y: "count",
       stroke: "steelblue",
       strokeWidth: 2
     }),
-    Plot.dot(cleaned, {
-      x: "created_on",
-      y: "request_count",
+    Plot.dot(byMonth, {
+      x: "date",
+      y: "count",
       fill: "steelblue",
       r: 3
     })
   ],
-  x: { label: "Date", type: "time" },
-  y: { label: "Number of Requests" },
-  title: "311 Service Requests Over Time"
+  x: { label: "Month", type: "time" },
+  y: { label: "Number of Inspections" },
+  title: "Inspections Over Time"
 })
 ```
 
-**Scatter plot:**
+**Bar chart comparing permit status:**
 
 ```javascript
+const byStatus = d3.rollups(
+  normalized,
+  v => v.length,
+  d => d.permit_status
+).map(([status, count]) => ({ status, count }));
+
 Plot.plot({
   marks: [
-    Plot.dot(cleaned, {
-      x: "response_time",
-      y: "request_count",
-      fill: "neighborhood",
-      r: 5,
-      tip: true
+    Plot.barY(byStatus, {
+      x: "status",
+      y: "count",
+      fill: "steelblue",
+      sort: { x: "-y" }
     })
   ],
-  x: { label: "Average Response Time (days)" },
-  y: { label: "Number of Requests" },
-  color: { legend: true },
-  title: "Response Time vs. Request Volume by Neighborhood"
+  x: { label: "Permit Status" },
+  y: { label: "Number of Facilities" },
+  title: "Facilities by Permit Status"
 })
 ```
 
@@ -481,39 +533,7 @@ After building, ask yourself: does this chart clearly answer the question I defi
 
 Build your second chart using the same process. It should ask a different question than Visualization 1.
 
-If your first chart was a comparison (bar chart), consider making your second one show change over time (line chart) or geographic distribution (map). Variety helps demonstrate that you understand when to use different chart types.
-
-**Choropleth map (if your data has geographic information):**
-
-```javascript
-import * as topojson from "npm:topojson-client";
-
-const us = await fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json")
-  .then(r => r.json());
-
-const states = topojson.feature(us, us.objects.states);
-
-Plot.plot({
-  projection: "albers-usa",
-  marks: [
-    Plot.geo(states, {
-      fill: d => {
-        const match = cleaned.find(row => row.state === d.properties.name);
-        return match ? match.value : null;
-      },
-      stroke: "white",
-      strokeWidth: 0.5,
-      tip: true
-    })
-  ],
-  color: {
-    scheme: "YlOrRd",
-    legend: true,
-    label: "Value"
-  },
-  title: "Your Title Here"
-})
-```
+If your first chart was a comparison (bar chart), consider making your second one show change over time (line chart) or distribution (histogram). Variety helps demonstrate that you understand when to use different chart types.
 
 ---
 
@@ -527,9 +547,9 @@ A chart without context is incomplete. Underneath each visualization, add a Mark
 
 **Example:**
 
-> **What this shows:** Service request volume is highest in neighborhoods with the densest residential population, with Squirrel Hill North and South Side Flats consistently in the top five.
+> **What this shows:** Social clubs and bars have the highest reinspection rates of any facility category, suggesting they receive more violations on initial inspection than restaurants.
 >
-> **Caveat:** This reflects requests submitted, not actual need. Neighborhoods with lower digital access may be underrepresented.
+> **Caveat:** This reflects the number of inspections recorded, not the severity of violations. A facility with many minor violations may appear more often than one with a single critical violation.
 
 ---
 
@@ -613,6 +633,21 @@ Submit the following on Canvas:
 - Your **Vercel live site link** (e.g. `https://67336-lab5-yourname.vercel.app`)
 
 > WARNING: Make sure you have added `shihongh`, `ygonz174`, and `lillian-zhao` as collaborators before submitting.
+
+---
+
+## Submission Checklist
+
+- [ ] Dataset meets all five criteria from Step 3
+- [ ] Data quality summary answers all four questions from Step 10
+- [ ] Cleaning code runs without errors and shows before and after row counts
+- [ ] Visualization 1 is complete, labeled, and has written context
+- [ ] Visualization 2 is complete, labeled, and has written context
+- [ ] The two visualizations use different chart types and answer different questions
+- [ ] Reflection section answers all four questions
+- [ ] Project builds with `npm run build` without errors
+- [ ] Live Vercel URL loads and both charts render correctly
+- [ ] Both links submitted on Canvas
 
 ---
 
