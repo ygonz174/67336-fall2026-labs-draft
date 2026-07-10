@@ -1,6 +1,6 @@
-# 67-336 Data Visualization — Labs (Fall 2026)
+# 67-336 Data Visualization Labs (Fall 2026)
 
-This repository contains the draft lab instructions and starter materials for 67-336 Data Visualization.
+This repository contains the draft lab instructions.
 
 ## Labs
 
